@@ -187,6 +187,16 @@ def cmd_calibrate(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ui(args: argparse.Namespace) -> int:
+    """Launch the desktop UI (Phase 1: live preview, Start/Stop, region select)."""
+    try:
+        from cardvision import gui
+    except ImportError as exc:
+        print(f"UI needs PySide6: pip install -r requirements-ui.txt  ({exc})")
+        return 1
+    return gui.launch()
+
+
 def cmd_show_crops(args: argparse.Namespace) -> int:
     import os
 
@@ -397,6 +407,9 @@ def build_parser() -> argparse.ArgumentParser:
                       help="draw local YOLO detections")
     prev.add_argument("--interval", type=float, default=0.1, help="refresh delay (s)")
     prev.set_defaults(func=cmd_preview)
+
+    ui = sub.add_parser("ui", help="launch the desktop UI (PySide6)")
+    ui.set_defaults(func=cmd_ui)
 
     sc = sub.add_parser("show-crops", help="dump frame/card/corner crops to disk")
     sc.add_argument("--image", help="use an image file instead of screen capture")

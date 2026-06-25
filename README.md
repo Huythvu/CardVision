@@ -39,7 +39,27 @@ your own source, then run against it.
 pip install -r requirements.txt
 ```
 
-## Usage
+## Desktop UI (Phase 1)
+
+A PySide6 window with live preview, Start/Stop, drag-to-select capture region,
+and a backend switch (detect / template / ml). Isolated from the core — the
+CLI keeps working unchanged.
+
+```bash
+pip install -r requirements-ui.txt
+python main.py ui
+```
+
+- **Select Region**: drag a rectangle over the screen area to capture.
+- **Start/Stop**: toggle the live capture+detection loop.
+- **Backend**: `detect` (outline cards, no templates needed), `template`
+  (corner reading), or `ml` (local YOLO).
+- **Interval**: capture cadence.
+
+Planned: Phase 2 settings/profiles, Phase 3 visual card-learning trainer,
+Phase 4 output panel + packaging to .exe.
+
+## Usage (CLI)
 
 ### Quick start with automatic detection (recommended for testing)
 
@@ -142,10 +162,13 @@ python main.py run --ml --loop --show                        # live
 - [x] Automatic card detection (contour finding + perspective warp).
 - [x] Confidence / overlay debug view.
 - [x] Local ML detector (YOLO) for live/messy feeds.
+- [x] Desktop UI Phase 1: live preview, Start/Stop, drag-to-select region.
+- [ ] UI Phase 2: live settings + saved config profiles.
+- [ ] UI Phase 3: visual card-learning trainer.
+- [ ] UI Phase 4: output panel, status, packaging to .exe.
 - [ ] Whole-card template matching as an alternative to corner reading.
 - [ ] Multi-template averaging per glyph for robustness across decks.
 - [ ] Camera-feed source.
-- [ ] Dedicated app shell (GUI / packaged executable).
 
 ## Project layout
 
@@ -161,6 +184,7 @@ cardvision/
   templates.py          load/save reference glyphs
   classify.py           template matching → CardResult
   viz.py                region/detection/ML overlays + glyph debug panel
+  gui.py                PySide6 desktop UI (Phase 1)
   formatter.py          CardResult → "A♠"
 train_yolo.py           train/fine-tune a local YOLO card model
 templates/              calibrated reference glyphs (generated)
