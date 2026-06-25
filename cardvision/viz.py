@@ -62,6 +62,17 @@ def annotate_detections(frame: np.ndarray, cards: list, results: list | None = N
     return out
 
 
+def annotate_ml(frame: np.ndarray, dets: list) -> np.ndarray:
+    """Draw boxes + labels for ML detections (mldetect.MLDetection)."""
+    out = frame.copy()
+    for d in dets:
+        x1, y1, x2, y2 = d.bbox
+        label = f"{formatter.format_rank_suit(d.rank, d.suit, ascii_only=True)} {d.conf:.2f}"
+        cv2.rectangle(out, (x1, y1), (x2, y2), GREEN, 2)
+        _text_with_bg(out, label, (x1, max(14, y1 - 6)), GREEN)
+    return out
+
+
 def _text_with_bg(img, text, org, color, scale=0.5, thick=1):
     (tw, th), base = cv2.getTextSize(text, FONT, scale, thick)
     x, y = org

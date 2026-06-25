@@ -212,9 +212,50 @@ def _classify_frame(frame, rank_refs, suit_refs):
     return results
 
 
+def _run_ml(args: argparse.Namespace) -> int:
+    """Run the local YOLO detector path."""
+    from cardvision import mldetect
+
+    detector = mldetect.MLCardDetector()
+    show = args.show
+    if show:
+        import cv2
+
+        from cardvision import viz
+
+    def step():
+        frame = _get_frame(args.image)
+        dets = detector.detect(frame)
+        labels = [formatter.format_rank_suit(d.rank, d.suit, ascii_only=args.ascii) for d in dets]
+        print("  ".join(labels) or "(no cards)", flush=True)
+        if show:
+            cv2.imshow("cardvision-ml", viz.annotate_ml(frame, dets))
+
+    try:
+        if show:
+            single = bool(args.image) and not args.loop
+            while True:
+                step()
+                key = cv2.waitKey(0 if single else max(1, int(args.interval * 1000)))
+                if single or (key & 0xFF) in (ord("q"), 27):
+                    break
+            cv2.destroyAllWindows()
+        elif args.loop and not args.image:
+            while True:
+                step()
+                time.sleep(args.interval)
+        else:
+            step()
+    except KeyboardInterrupt:
+        print("\nstopped.")
+    return 0
+
+
 def cmd_run(args: argparse.Namespace) -> int:
+    if args.ml:
+        return _run_ml(args)
     if not templates.templates_available():
-        print("No templates found. Run 'calibrate' first to build them.")
+        print("No templates found. Run 'calibrate' first, 'gen-templates', or use --ml.")
         return 1
     rank_refs = templates.load_rank_templates()
     suit_refs = templates.load_suit_templates()
@@ -285,11 +326,17 @@ def cmd_preview(args: argparse.Namespace) -> int:
 
     if args.auto:
         from cardvision import detect
+    if args.ml:
+        from cardvision import mldetect
+
+        detector = mldetect.MLCardDetector()
 
     single = bool(args.image)
     while True:
         frame = _get_frame(args.image)
-        if args.auto:
+        if args.ml:
+            view = viz.annotate_ml(frame, detector.detect(frame))
+        elif args.auto:
             cards = detect.find_cards(frame)
             view = viz.annotate_detections(frame, cards, None)
         else:
@@ -331,6 +378,8 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--image", help="use an image file instead of screen capture")
     run.add_argument("--auto", action="store_true",
                      help="auto-detect cards instead of using fixed CARD_REGIONS")
+    run.add_argument("--ml", action="store_true",
+                     help="use the local YOLO detector (config.ML_MODEL_PATH)")
     run.add_argument("--loop", action="store_true", help="classify continuously")
     run.add_argument("--interval", type=float, default=0.5, help="loop delay (s)")
     run.add_argument("--ascii", action="store_true", help="use S/H/D/C, not symbols")
@@ -344,6 +393,8 @@ def build_parser() -> argparse.ArgumentParser:
     prev.add_argument("--image", help="use an image file instead of screen capture")
     prev.add_argument("--auto", action="store_true",
                       help="draw auto-detected cards instead of fixed regions")
+    prev.add_argument("--ml", action="store_true",
+                      help="draw local YOLO detections")
     prev.add_argument("--interval", type=float, default=0.1, help="refresh delay (s)")
     prev.set_defaults(func=cmd_preview)
 

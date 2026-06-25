@@ -74,3 +74,15 @@ DETECT_DILATE_ITERS = 2
 
 # approxPolyDP epsilon as a fraction of contour perimeter (corner snapping).
 DETECT_APPROX_EPS = 0.02
+
+# --- ML detector (YOLO, optional) ----------------------------------------
+# Path to local YOLO weights trained on a 52-class playing-card dataset.
+ML_MODEL_PATH = os.path.join(PROJECT_ROOT, "models", "cards.pt")
+
+# Minimum detection confidence (0..1) for the ML path.
+ML_CONF_THRESHOLD = 0.40
+
+# Override map for non-standard class names -> (rank, suit). Most datasets use
+# codes like "AS"/"10D" which are parsed automatically; add entries here only
+# for names parse_card_code can't resolve.
+ML_CLASS_MAP: dict[str, tuple[str, str]] = {}

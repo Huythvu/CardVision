@@ -1,0 +1,4 @@
+# Optional dependencies for the local ML detector (run: pip install -r requirements-ml.txt)
+# ultralytics pulls in PyTorch (large). CPU-only is fine for inference on stills;
+# a GPU helps for training and high-FPS live capture.
+ultralytics>=8.1

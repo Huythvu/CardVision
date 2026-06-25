@@ -8,3 +8,9 @@ crops/
 # commit a template set.
 templates/ranks/
 templates/suits/
+
+# Model weights and YOLO training runs (large, generated).
+models/*.pt
+models/*.onnx
+runs/
+datasets/

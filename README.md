@@ -77,6 +77,28 @@ with `calibrate` where the synthetic one matches poorly.
 Detection tuning lives in `config.py` under "Automatic card detection"
 (`DETECT_*`, `CARD_WARP_SIZE`).
 
+### Live / messy feeds: local ML detector (`--ml`)
+
+Classic CV (corner reading) is great for clean digital cards but struggles
+with **live-table feeds**: overlapping fanned hands, perspective, busy felt,
+small glyphs. For those, use a locally-run YOLO detector — **100% local and
+free** (no cloud, no API, no tokens), just heavier deps.
+
+```bash
+pip install -r requirements-ml.txt          # ultralytics (pulls PyTorch)
+# get weights: drop a trained model at models/cards.pt, OR train one:
+python train_yolo.py --data path/to/data.yaml --epochs 80 --export models/cards.pt
+
+python main.py preview --ml --image samples/blackjack.png   # see detections
+python main.py run --ml --image samples/blackjack.png        # print labels
+python main.py run --ml --loop --show                        # live
+```
+
+- Get a **52-class playing-card dataset** (YOLO format) with class names as
+  card codes (`AS`, `KH`, `10D`). `mldetect.parse_card_code` also understands
+  word forms ("ace of spades"); add odd names to `config.ML_CLASS_MAP`.
+- Tune `ML_MODEL_PATH` / `ML_CONF_THRESHOLD` in `config.py`.
+
 ### Fixed-region mode
 
 1. **Aim the capture.** Edit `cardvision/config.py`:
@@ -119,6 +141,7 @@ Detection tuning lives in `config.py` under "Automatic card detection"
 
 - [x] Automatic card detection (contour finding + perspective warp).
 - [x] Confidence / overlay debug view.
+- [x] Local ML detector (YOLO) for live/messy feeds.
 - [ ] Whole-card template matching as an alternative to corner reading.
 - [ ] Multi-template averaging per glyph for robustness across decks.
 - [ ] Camera-feed source.
@@ -132,11 +155,13 @@ cardvision/
   config.py             labels, crop regions, detection + match thresholds
   capture.py            screen grab (mss) + image loading + cropping
   detect.py             auto card detection: contours → 4-corner warp
+  mldetect.py           local YOLO detector + card-code parsing
   corner.py             corner extraction, binarize, rank/suit split
   synth.py              synthetic starter-template generator
   templates.py          load/save reference glyphs
   classify.py           template matching → CardResult
-  viz.py                region/detection overlays + glyph debug panel
+  viz.py                region/detection/ML overlays + glyph debug panel
   formatter.py          CardResult → "A♠"
+train_yolo.py           train/fine-tune a local YOLO card model
 templates/              calibrated reference glyphs (generated)
 ```
