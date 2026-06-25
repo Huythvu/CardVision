@@ -43,10 +43,25 @@ def _get_frame(image_path: str | None):
 
 def cmd_calibrate(args: argparse.Namespace) -> int:
     frame = _get_frame(args.image)
-    if args.slot not in config.CARD_REGIONS:
-        print(f"Unknown slot '{args.slot}'. Known: {list(config.CARD_REGIONS)}")
-        return 1
-    card = capture.crop(frame, config.CARD_REGIONS[args.slot])
+    if args.auto:
+        from cardvision import detect
+
+        cards = detect.find_cards(frame)
+        if not cards:
+            print("No card detected in frame.")
+            return 1
+        if len(cards) > 1:
+            print(f"! {len(cards)} cards detected; using the left-most. "
+                  "Show one card at a time when calibrating with --auto.")
+        card = cards[0].warped
+    else:
+        if not args.slot:
+            print("Pass --slot <name> (fixed mode) or --auto (detect the card).")
+            return 1
+        if args.slot not in config.CARD_REGIONS:
+            print(f"Unknown slot '{args.slot}'. Known: {list(config.CARD_REGIONS)}")
+            return 1
+        card = capture.crop(frame, config.CARD_REGIONS[args.slot])
     corner = extract_corner(card)
     rank_glyph, suit_glyph = split_rank_suit(corner)
 
@@ -109,8 +124,23 @@ def cmd_run(args: argparse.Namespace) -> int:
 
         from cardvision import viz
 
+    if args.auto:
+        from cardvision import detect
+
     def step():
         frame = _get_frame(args.image)
+        if args.auto:
+            cards = detect.find_cards(frame)
+            results = [classify_card(c.warped, rank_refs, suit_refs) for c in cards]
+            labels = [formatter.format_card(r, ascii_only=args.ascii) for r in results]
+            line = "  ".join(f"card_{i+1}={lbl}" for i, lbl in enumerate(labels)) or "(no cards)"
+            print(line, flush=True)
+            if show:
+                cv2.imshow("cardvision", viz.annotate_detections(frame, cards, results))
+                if args.debug:
+                    cv2.imshow("cardvision-debug",
+                               viz.debug_panel({f"card_{i+1}": r for i, r in enumerate(results)}))
+            return results
         results = _classify_frame(frame, rank_refs, suit_refs)
         labels = formatter.format_hand(results, ascii_only=args.ascii)
         line = "  ".join(f"{slot}={label}" for slot, label in labels.items())
@@ -143,18 +173,27 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 
 def cmd_preview(args: argparse.Namespace) -> int:
-    """Show the captured frame with card regions outlined — no templates needed.
+    """Show the captured frame with card outlines — no templates needed.
 
-    Useful for aligning SCREEN_REGION / CARD_REGIONS before calibrating.
+    --auto draws auto-detected card quads (test placement freely); otherwise
+    outlines the fixed CARD_REGIONS for aligning SCREEN_REGION / CARD_REGIONS.
     """
     import cv2
 
     from cardvision import viz
 
+    if args.auto:
+        from cardvision import detect
+
     single = bool(args.image)
     while True:
         frame = _get_frame(args.image)
-        cv2.imshow("cardvision-preview", viz.annotate_frame(frame, None))
+        if args.auto:
+            cards = detect.find_cards(frame)
+            view = viz.annotate_detections(frame, cards, None)
+        else:
+            view = viz.annotate_frame(frame, None)
+        cv2.imshow("cardvision-preview", view)
         key = cv2.waitKey(0 if single else max(1, int(args.interval * 1000)))
         if single or key in (ord("q"), 27):
             break
@@ -168,25 +207,31 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="command", required=True)
 
     cal = sub.add_parser("calibrate", help="save rank/suit reference templates")
-    cal.add_argument("--slot", required=True, help="card slot from config.CARD_REGIONS")
+    cal.add_argument("--slot", help="card slot from config.CARD_REGIONS (fixed mode)")
+    cal.add_argument("--auto", action="store_true",
+                     help="auto-detect the card instead of using a fixed slot")
     cal.add_argument("--rank", help="rank label to save (A,2..10,J,Q,K)")
     cal.add_argument("--suit", help="suit label to save (S,H,D,C)")
     cal.add_argument("--image", help="use an image file instead of screen capture")
     cal.set_defaults(func=cmd_calibrate)
 
-    run = sub.add_parser("run", help="classify configured card slots")
+    run = sub.add_parser("run", help="classify cards (fixed slots or --auto)")
     run.add_argument("--image", help="use an image file instead of screen capture")
+    run.add_argument("--auto", action="store_true",
+                     help="auto-detect cards instead of using fixed CARD_REGIONS")
     run.add_argument("--loop", action="store_true", help="classify continuously")
     run.add_argument("--interval", type=float, default=0.5, help="loop delay (s)")
     run.add_argument("--ascii", action="store_true", help="use S/H/D/C, not symbols")
     run.add_argument("--show", action="store_true",
-                     help="open a window highlighting card regions + labels")
+                     help="open a window highlighting cards + labels")
     run.add_argument("--debug", action="store_true",
                      help="also show a panel of the rank/suit glyphs being matched")
     run.set_defaults(func=cmd_run)
 
-    prev = sub.add_parser("preview", help="show capture regions (no templates needed)")
+    prev = sub.add_parser("preview", help="show card outlines (no templates needed)")
     prev.add_argument("--image", help="use an image file instead of screen capture")
+    prev.add_argument("--auto", action="store_true",
+                      help="draw auto-detected cards instead of fixed regions")
     prev.add_argument("--interval", type=float, default=0.1, help="refresh delay (s)")
     prev.set_defaults(func=cmd_preview)
 

@@ -39,6 +39,29 @@ def annotate_frame(frame: np.ndarray, results: dict | None = None) -> np.ndarray
     return out
 
 
+def annotate_detections(frame: np.ndarray, cards: list, results: list | None = None) -> np.ndarray:
+    """Outline each auto-detected card quad and label it.
+
+    ``cards`` is a list of detect.DetectedCard; ``results`` (optional) is a
+    parallel list of CardResult. With no results, just outlines detections
+    (no templates needed) — handy for testing placement.
+    """
+    out = frame.copy()
+    for i, card in enumerate(cards):
+        r = results[i] if results and i < len(results) else None
+        color = GREY
+        label = f"card {i + 1}"
+        if r is not None:
+            color = GREEN if r.confident else AMBER
+            text = formatter.format_card(r, ascii_only=True)
+            label = f"{text}  r{r.rank_score:.2f} s{r.suit_score:.2f}"
+        pts = card.quad.astype(np.int32).reshape(-1, 1, 2)
+        cv2.polylines(out, [pts], True, color, 2)
+        tl = card.quad[0].astype(int)
+        _text_with_bg(out, label, (int(tl[0]), max(14, int(tl[1]) - 8)), color)
+    return out
+
+
 def _text_with_bg(img, text, org, color, scale=0.5, thick=1):
     (tw, th), base = cv2.getTextSize(text, FONT, scale, thick)
     x, y = org

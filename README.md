@@ -8,9 +8,14 @@ Pure, local, free: Python + OpenCV only — no cloud or paid vision APIs.
 ## Scope (v1)
 
 - General card identification only (no blackjack / poker / strategy).
-- **Fixed/manual crop positions** for each card slot (automatic card
-  detection comes later).
+- Two ways to locate cards:
+  - **Fixed/manual crop positions** (`CARD_REGIONS`) — deterministic.
+  - **Automatic detection** (`--auto`) — finds card-shaped quads and
+    perspective-warps each to a canonical upright image, so cards can sit
+    anywhere. Great for testing; assumes roughly upright cards.
 - Cards are identified by reading the **top-left corner**: rank + suit.
+  (Auto-detection warps to a canonical size first, so the corner is always
+  in the same place — far more stable than reading a raw screen crop.)
 - Classification is **template matching** (not OCR) for robustness on
   stylized single glyphs. Suit color (red vs black) is used as a prior.
 
@@ -35,6 +40,23 @@ pip install -r requirements.txt
 ```
 
 ## Usage
+
+### Quick start with automatic detection (recommended for testing)
+
+No fixed coordinates needed — just get cards into the capture region.
+
+```bash
+python main.py preview --auto              # see what gets detected (no templates)
+python main.py calibrate --auto --rank A --suit S   # show ONE card, label it
+# ...repeat calibrate for the ranks/suits you need...
+python main.py run --auto --loop --show    # identify everything, live
+python main.py run --auto --loop --show --debug   # + glyph diagnostic panel
+```
+
+Detection tuning lives in `config.py` under "Automatic card detection"
+(`DETECT_*`, `CARD_WARP_SIZE`).
+
+### Fixed-region mode
 
 1. **Aim the capture.** Edit `cardvision/config.py`:
    - `SCREEN_REGION` — the monitor area to grab.
@@ -74,21 +96,25 @@ pip install -r requirements.txt
 
 ## Roadmap
 
-- [ ] Automatic card detection (contour finding + perspective warp).
+- [x] Automatic card detection (contour finding + perspective warp).
+- [x] Confidence / overlay debug view.
+- [ ] Whole-card template matching as an alternative to corner reading.
 - [ ] Multi-template averaging per glyph for robustness across decks.
 - [ ] Camera-feed source.
-- [ ] Confidence/overlay debug view.
+- [ ] Dedicated app shell (GUI / packaged executable).
 
 ## Project layout
 
 ```
 main.py                 CLI: calibrate / run / show-crops
 cardvision/
-  config.py             labels, crop regions, thresholds
+  config.py             labels, crop regions, detection + match thresholds
   capture.py            screen grab (mss) + image loading + cropping
+  detect.py             auto card detection: contours → 4-corner warp
   corner.py             corner extraction, binarize, rank/suit split
   templates.py          load/save reference glyphs
   classify.py           template matching → CardResult
+  viz.py                region/detection overlays + glyph debug panel
   formatter.py          CardResult → "A♠"
 templates/              calibrated reference glyphs (generated)
 ```

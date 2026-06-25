@@ -55,3 +55,22 @@ BINARY_THRESHOLD = 0
 
 # Minimum match confidence (0..1) below which a result is reported as unknown.
 MIN_MATCH_CONFIDENCE = 0.55
+
+# --- Automatic card detection --------------------------------------------
+# Canonical flat-card size each detected card is perspective-warped to.
+# Detection normalizes scale/orientation, so downstream corner reading is
+# stable regardless of where the card sat in the frame. (width, height)
+CARD_WARP_SIZE = (200, 300)
+
+# A detected quadrilateral counts as a card when its area is within this
+# fraction of the whole frame (filters out tiny noise and full-frame blobs).
+DETECT_MIN_AREA_FRAC = 0.01
+DETECT_MAX_AREA_FRAC = 0.90
+
+# Canny edge thresholds and the dilation iterations used to close gaps in the
+# card outline before contour finding.
+DETECT_CANNY = (50, 150)
+DETECT_DILATE_ITERS = 2
+
+# approxPolyDP epsilon as a fraction of contour perimeter (corner snapping).
+DETECT_APPROX_EPS = 0.02
