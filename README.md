@@ -47,11 +47,32 @@ No fixed coordinates needed — just get cards into the capture region.
 
 ```bash
 python main.py preview --auto              # see what gets detected (no templates)
-python main.py calibrate --auto --rank A --suit S   # show ONE card, label it
-# ...repeat calibrate for the ranks/suits you need...
+python main.py gen-templates               # instant starter knowledge (synthetic)
 python main.py run --auto --loop --show    # identify everything, live
 python main.py run --auto --loop --show --debug   # + glyph diagnostic panel
 ```
+
+### Card knowledge (templates)
+
+CardVision matches cards against reference glyphs (13 ranks + 4 suits = 17).
+Three ways to populate them, lowest-effort first:
+
+```bash
+# A. Synthetic starter set — works instantly, but it's only a baseline; a font
+#    that differs from your cards will score low and report '??' (never a wrong
+#    guess). Re-run with --force to overwrite.
+python main.py gen-templates
+
+# B. Guided walkthrough — capture all 17 glyphs from YOUR source in one pass.
+#    Highest accuracy. SPACE captures, N skips, B goes back, Q quits.
+python main.py calibrate-all
+
+# C. One glyph at a time (fixed slot or --auto):
+python main.py calibrate --auto --rank A --suit S
+```
+
+You can mix these: generate a starter set, then overwrite individual glyphs
+with `calibrate` where the synthetic one matches poorly.
 
 Detection tuning lives in `config.py` under "Automatic card detection"
 (`DETECT_*`, `CARD_WARP_SIZE`).
@@ -112,6 +133,7 @@ cardvision/
   capture.py            screen grab (mss) + image loading + cropping
   detect.py             auto card detection: contours → 4-corner warp
   corner.py             corner extraction, binarize, rank/suit split
+  synth.py              synthetic starter-template generator
   templates.py          load/save reference glyphs
   classify.py           template matching → CardResult
   viz.py                region/detection overlays + glyph debug panel
