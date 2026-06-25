@@ -41,6 +41,107 @@ def _get_frame(image_path: str | None):
     return capture.grab_screen()
 
 
+def _largest_card(cards):
+    """Pick the detected card with the largest quad (the one held up front)."""
+    import cv2
+
+    if not cards:
+        return None
+    return max(cards, key=lambda d: cv2.contourArea(d.quad.astype("float32")))
+
+
+def cmd_gen_templates(args: argparse.Namespace) -> int:
+    """Generate a synthetic starter set so the program works with no calibration."""
+    from cardvision import synth
+
+    saved, skipped = synth.generate(force=args.force)
+    print(f"Generated {len(saved)} template(s): {', '.join(saved) or '(none)'}")
+    if skipped:
+        print(f"Skipped {len(skipped)}: {', '.join(skipped)}")
+        if any("exists" in s for s in skipped):
+            print("  (use --force to overwrite existing/calibrated templates)")
+    return 0
+
+
+def cmd_calibrate_all(args: argparse.Namespace) -> int:
+    """Guided walkthrough: capture every rank then every suit from your source.
+
+    Shows the live detected card; press SPACE to capture the highlighted glyph,
+    N to skip, B to go back, Q/Esc to quit.
+    """
+    import cv2
+    import numpy as np
+
+    from cardvision import detect
+
+    targets = [("rank", r) for r in config.RANKS] + [("suit", s) for s in config.SUITS]
+    win = "cardvision-calibrate-all"
+    i = 0
+    while 0 <= i < len(targets):
+        kind, label = targets[i]
+        frame = _get_frame(args.image)
+        card = _largest_card(detect.find_cards(frame))
+
+        glyph = None
+        warped = None
+        if card is not None:
+            warped = card.warped
+            rank_g, suit_g = split_rank_suit(extract_corner(warped))
+            glyph = rank_g if kind == "rank" else suit_g
+
+        disp = _calib_display(warped, glyph, i, len(targets), kind, label)
+        cv2.imshow(win, disp)
+        key = cv2.waitKey(30) & 0xFF
+        if key in (ord("q"), 27):
+            break
+        elif key in (ord("n"),):
+            i += 1
+        elif key in (ord("b"),):
+            i = max(0, i - 1)
+        elif key in (32, 13):  # space / enter -> capture
+            if glyph is None:
+                print(f"[{label}] no glyph to capture (no card / blank corner).")
+                continue
+            if kind == "rank":
+                templates.save_rank(label, glyph)
+            else:
+                templates.save_suit(label, glyph)
+            print(f"[{label}] captured.")
+            i += 1
+    cv2.destroyAllWindows()
+    print("Calibration walkthrough ended.")
+    return 0
+
+
+def _calib_display(warped, glyph, idx, total, kind, label):
+    """Compose the guided-calibration window: card | candidate glyph | prompt."""
+    import cv2
+    import numpy as np
+
+    from cardvision import viz
+
+    panel_w = 520
+    disp = np.zeros((360, panel_w, 3), np.uint8)
+    # Left: the detected/warped card (or a placeholder).
+    if warped is not None:
+        card_view = cv2.resize(warped, (180, 270))
+    else:
+        card_view = np.zeros((270, 180, 3), np.uint8)
+        cv2.putText(card_view, "no card", (40, 135), viz.FONT, 0.6, viz.GREY, 1, cv2.LINE_AA)
+    disp[70:340, 20:200] = card_view
+    # Right: the candidate glyph that SPACE would save.
+    gtile = viz._to_bgr(glyph, (120, 170))
+    disp[70:240, 240:360] = gtile
+
+    color = viz.GREEN if glyph is not None else viz.AMBER
+    cv2.putText(disp, f"[{idx + 1}/{total}] Show a card, capture {kind.upper()} = {label}",
+                (20, 30), viz.FONT, 0.6, color, 1, cv2.LINE_AA)
+    cv2.putText(disp, "SPACE capture   N skip   B back   Q quit",
+                (20, 55), viz.FONT, 0.5, viz.GREY, 1, cv2.LINE_AA)
+    cv2.putText(disp, "candidate ->", (240, 60), viz.FONT, 0.5, viz.GREY, 1, cv2.LINE_AA)
+    return disp
+
+
 def cmd_calibrate(args: argparse.Namespace) -> int:
     frame = _get_frame(args.image)
     if args.auto:
@@ -214,6 +315,17 @@ def build_parser() -> argparse.ArgumentParser:
     cal.add_argument("--suit", help="suit label to save (S,H,D,C)")
     cal.add_argument("--image", help="use an image file instead of screen capture")
     cal.set_defaults(func=cmd_calibrate)
+
+    gen = sub.add_parser("gen-templates",
+                         help="generate a synthetic starter template set (no calibration)")
+    gen.add_argument("--force", action="store_true",
+                     help="overwrite existing/calibrated templates")
+    gen.set_defaults(func=cmd_gen_templates)
+
+    cal_all = sub.add_parser("calibrate-all",
+                             help="guided walkthrough to capture all 17 glyphs from your source")
+    cal_all.add_argument("--image", help="use an image file instead of screen capture")
+    cal_all.set_defaults(func=cmd_calibrate_all)
 
     run = sub.add_parser("run", help="classify cards (fixed slots or --auto)")
     run.add_argument("--image", help="use an image file instead of screen capture")
