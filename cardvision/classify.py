@@ -7,7 +7,7 @@ black) is used as a prior to disambiguate similarly shaped pips.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import cv2
 import numpy as np
@@ -22,6 +22,10 @@ class CardResult:
     rank_score: float
     suit_score: float
     is_red: bool
+    # Debug images (the glyphs the matcher actually saw). Populated by
+    # classify_card; used by the visualization panel to diagnose misreads.
+    rank_glyph: np.ndarray | None = field(default=None, repr=False)
+    suit_glyph: np.ndarray | None = field(default=None, repr=False)
 
     @property
     def confident(self) -> bool:
@@ -79,4 +83,7 @@ def classify_card(
     candidates = candidates or suit_refs  # fall back if color filtering empties it
     suit, suit_score = _best_match(suit_glyph, candidates)
 
-    return CardResult(rank, suit, rank_score, suit_score, is_red)
+    return CardResult(
+        rank, suit, rank_score, suit_score, is_red,
+        rank_glyph=rank_glyph, suit_glyph=suit_glyph,
+    )

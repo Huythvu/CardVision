@@ -55,19 +55,25 @@ def split_rank_suit(corner: np.ndarray) -> tuple[np.ndarray | None, np.ndarray |
     """
     binimg = binarize(corner)
 
-    # Row-wise ink counts; find the largest empty band in the middle third.
+    # Confine the split to the inked span so blank top/bottom margins don't
+    # get mistaken for the rank/suit boundary.
     row_ink = binimg.sum(axis=1)
-    h = len(row_ink)
-    search_lo, search_hi = int(h * 0.30), int(h * 0.80)
-    band = row_ink[search_lo:search_hi]
+    inked = np.where(row_ink > 0)[0]
+    if inked.size == 0:
+        return None, None
 
-    if band.size and band.min() == 0:
-        # Pick the empty row nearest the vertical center of the search band.
-        empty = np.where(band == 0)[0]
-        center = band.size / 2
-        split = search_lo + int(empty[np.argmin(np.abs(empty - center))])
+    top, bottom = int(inked[0]), int(inked[-1])
+    span_center = (top + bottom) / 2.0
+
+    # Empty rows strictly inside the inked span are gaps between glyphs.
+    interior = np.arange(top + 1, bottom)
+    gaps = interior[row_ink[interior] == 0]
+    if gaps.size:
+        # Split at the gap row nearest the middle of the inked span.
+        split = int(gaps[np.argmin(np.abs(gaps - span_center))])
     else:
-        split = h // 2  # fallback: halve the strip
+        # Rank and suit touch: split the inked span in half.
+        split = int(span_center)
 
     rank = _tight_crop(binimg[:split, :])
     suit = _tight_crop(binimg[split:, :])

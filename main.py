@@ -102,23 +102,63 @@ def cmd_run(args: argparse.Namespace) -> int:
         return 1
     rank_refs = templates.load_rank_templates()
     suit_refs = templates.load_suit_templates()
+    show = args.show or args.debug
 
-    def once():
+    if show:
+        import cv2
+
+        from cardvision import viz
+
+    def step():
         frame = _get_frame(args.image)
         results = _classify_frame(frame, rank_refs, suit_refs)
         labels = formatter.format_hand(results, ascii_only=args.ascii)
         line = "  ".join(f"{slot}={label}" for slot, label in labels.items())
         print(line, flush=True)
+        if show:
+            cv2.imshow("cardvision", viz.annotate_frame(frame, results))
+            if args.debug:
+                cv2.imshow("cardvision-debug", viz.debug_panel(results))
+        return results
 
-    if args.loop and not args.image:
+    if show:
+        # Window-driven loop; press q or Esc to quit.
+        single = bool(args.image) and not args.loop
+        while True:
+            step()
+            key = cv2.waitKey(0 if single else max(1, int(args.interval * 1000)))
+            if single or key in (ord("q"), 27):
+                break
+        cv2.destroyAllWindows()
+    elif args.loop and not args.image:
         try:
             while True:
-                once()
+                step()
                 time.sleep(args.interval)
         except KeyboardInterrupt:
             print("\nstopped.")
     else:
-        once()
+        step()
+    return 0
+
+
+def cmd_preview(args: argparse.Namespace) -> int:
+    """Show the captured frame with card regions outlined — no templates needed.
+
+    Useful for aligning SCREEN_REGION / CARD_REGIONS before calibrating.
+    """
+    import cv2
+
+    from cardvision import viz
+
+    single = bool(args.image)
+    while True:
+        frame = _get_frame(args.image)
+        cv2.imshow("cardvision-preview", viz.annotate_frame(frame, None))
+        key = cv2.waitKey(0 if single else max(1, int(args.interval * 1000)))
+        if single or key in (ord("q"), 27):
+            break
+    cv2.destroyAllWindows()
     return 0
 
 
@@ -139,7 +179,16 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--loop", action="store_true", help="classify continuously")
     run.add_argument("--interval", type=float, default=0.5, help="loop delay (s)")
     run.add_argument("--ascii", action="store_true", help="use S/H/D/C, not symbols")
+    run.add_argument("--show", action="store_true",
+                     help="open a window highlighting card regions + labels")
+    run.add_argument("--debug", action="store_true",
+                     help="also show a panel of the rank/suit glyphs being matched")
     run.set_defaults(func=cmd_run)
+
+    prev = sub.add_parser("preview", help="show capture regions (no templates needed)")
+    prev.add_argument("--image", help="use an image file instead of screen capture")
+    prev.add_argument("--interval", type=float, default=0.1, help="refresh delay (s)")
+    prev.set_defaults(func=cmd_preview)
 
     sc = sub.add_parser("show-crops", help="dump frame/card/corner crops to disk")
     sc.add_argument("--image", help="use an image file instead of screen capture")
